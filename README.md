@@ -1,0 +1,1 @@
+# registrator suppoert etcdv3
