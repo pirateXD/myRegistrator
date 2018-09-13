@@ -1,4 +1,4 @@
-FROM alpine:3.7 AS builder
+FROM alpine:latest AS builder
 COPY . /go/src/github.com/pirateXD/registrator
 RUN apk --no-cache add -t build-deps build-base go git curl \
 	&& apk --no-cache add ca-certificates \
