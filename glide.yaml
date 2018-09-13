@@ -1,0 +1,18 @@
+package: .
+import:
+- package: github.com/coreos/etcd
+  version: ^3.3.9
+  subpackages:
+  - clientv3
+- package: github.com/fsouza/go-dockerclient
+  version: ^1.2.2
+- package: github.com/gliderlabs/pkg
+  subpackages:
+  - usage
+- package: github.com/gliderlabs/registrator
+  version: ^7.0.0
+  subpackages:
+  - bridge
+- package: github.com/pirateXD/registrator
+  subpackages:
+  - etcd
