@@ -10,7 +10,7 @@ import:
   subpackages:
   - usage
 - package: github.com/gliderlabs/registrator
-  version: ^7.0.0
+  version: master
   subpackages:
   - bridge
 - package: github.com/pirateXD/registrator

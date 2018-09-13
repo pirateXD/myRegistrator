@@ -9,8 +9,10 @@ import (
 	"regexp"
 	"strconv"
 
-	etcdv3 "github.com/coreos/etcd/clientv3"
+	"context"
+	"github.com/coreos/etcd/clientv3"
 	"github.com/gliderlabs/registrator/bridge"
+	"time"
 )
 
 func init() {
@@ -18,6 +20,23 @@ func init() {
 }
 
 type Factory struct{}
+
+func newClient(host []string) *clientv3.Client {
+	// config
+	cfg := clientv3.Config{
+		Endpoints:            host,
+		DialTimeout:          5 * time.Second,
+		DialKeepAliveTime:    time.Second,
+		DialKeepAliveTimeout: time.Second,
+	}
+
+	// create client
+	cli, err := clientv3.New(cfg)
+	if err != nil {
+		panic(err)
+	}
+	return cli
+}
 
 func (f *Factory) New(uri *url.URL) bridge.RegistryAdapter {
 	urls := make([]string, 0)
@@ -37,15 +56,15 @@ func (f *Factory) New(uri *url.URL) bridge.RegistryAdapter {
 
 	if match, _ := regexp.Match("0\\.4\\.*", body); match == true {
 		log.Println("etcd: using v0 client")
-		return &EtcdAdapter{client: etcd.NewClient(urls), path: uri.Path}
+		return &EtcdAdapter{client: newClient(urls), path: uri.Path}
 	}
 
-	return &EtcdAdapter{client2: etcd2.NewClient(urls), path: uri.Path}
+	return &EtcdAdapter{client2: newClient(urls), path: uri.Path}
 }
 
 type EtcdAdapter struct {
-	client  *etcd.Client
-	client2 *etcd2.Client
+	client  *clientv3.Client
+	client2 *clientv3.Client
 
 	path string
 }
@@ -55,11 +74,9 @@ func (r *EtcdAdapter) Ping() error {
 
 	var err error
 	if r.client != nil {
-		rr := etcd.NewRawRequest("GET", "version", nil, nil)
-		_, err = r.client.SendRequest(rr)
+		_, err = r.client.MemberList(context.TODO())
 	} else {
-		rr := etcd2.NewRawRequest("GET", "version", nil, nil)
-		_, err = r.client2.SendRequest(rr)
+		_, err = r.client2.MemberList(context.TODO())
 	}
 
 	if err != nil {
@@ -69,14 +86,14 @@ func (r *EtcdAdapter) Ping() error {
 }
 
 func (r *EtcdAdapter) syncEtcdCluster() {
-	var result bool
+	var result error
 	if r.client != nil {
-		result = r.client.SyncCluster()
+		result = r.client.Sync(context.TODO())
 	} else {
-		result = r.client2.SyncCluster()
+		result = r.client2.Sync(context.TODO())
 	}
 
-	if !result {
+	if nil != result {
 		log.Println("etcd: sync cluster was unsuccessful")
 	}
 }
@@ -90,9 +107,15 @@ func (r *EtcdAdapter) Register(service *bridge.Service) error {
 
 	var err error
 	if r.client != nil {
-		_, err = r.client.Set(path, addr, uint64(service.TTL))
+		var resp *clientv3.LeaseGrantResponse
+		if resp, err = r.client.Grant(context.TODO(), int64(service.TTL)); err == nil {
+			_, err = r.client.Put(context.TODO(), path, addr, clientv3.WithLease(resp.ID))
+		}
 	} else {
-		_, err = r.client2.Set(path, addr, uint64(service.TTL))
+		var resp *clientv3.LeaseGrantResponse
+		if resp, err = r.client2.Grant(context.TODO(), int64(service.TTL)); err == nil {
+			_, err = r.client2.Put(context.TODO(), path, addr, clientv3.WithLease(resp.ID))
+		}
 	}
 
 	if err != nil {
@@ -108,9 +131,9 @@ func (r *EtcdAdapter) Deregister(service *bridge.Service) error {
 
 	var err error
 	if r.client != nil {
-		_, err = r.client.Delete(path, false)
+		_, err = r.client.Delete(context.TODO(), path)
 	} else {
-		_, err = r.client2.Delete(path, false)
+		_, err = r.client2.Delete(context.TODO(), path)
 	}
 
 	if err != nil {
@@ -120,7 +143,21 @@ func (r *EtcdAdapter) Deregister(service *bridge.Service) error {
 }
 
 func (r *EtcdAdapter) Refresh(service *bridge.Service) error {
-	return r.Register(service)
+	//return r.Register(service)
+
+	r.syncEtcdCluster()
+
+	var err error
+	if r.client != nil {
+		_, err = r.client.Leases(context.TODO())
+	} else {
+		_, err = r.client2.Leases(context.TODO())
+	}
+
+	if err != nil {
+		log.Println("etcd: failed to register service:", err)
+	}
+	return err
 }
 
 func (r *EtcdAdapter) Services() ([]*bridge.Service, error) {
