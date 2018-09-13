@@ -1,6 +1,8 @@
 FROM golang
 MAINTAINER YangJunhai <yangjunhai@xindong.com>
 COPY . /go/src/github.com/pirateXD/registrator
+RUN cd /go/src/github.com/pirateXD/registrator
 RUN go build -ldflags "-X main.Version=$(cat VERSION)" -o /bin/registrator
+RUN rm -rf /go
 ENTRYPOINT ["/bin/registrator"]
 CMD ["--help"]
