@@ -12,7 +12,7 @@ RUN apk --no-cache add -t build-deps build-base go git curl \
 	&& rm -rf /go \
 	&& apk del --purge build-deps
 
-FROM alpine:3.7
+FROM alpine:latest
 COPY --from=builder /bin/registrator /bin/registrator
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ENTRYPOINT ["/bin/registrator"]
