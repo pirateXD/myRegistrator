@@ -1,5 +1,5 @@
-hash: 5bf374a3f84a2224336061c4fd405a7c8905225a6731238978f706decc9a95f6
-updated: 2018-09-13T17:20:43.3567079+08:00
+hash: 00d08f1e424f29365ca0cb0147111ad50175678ede5724f52c906965542b80eb
+updated: 2018-09-13T19:42:28.3762989+08:00
 imports:
 - name: github.com/Azure/go-ansiterm
   version: d6e3b3328b783f23731bc4d058875b0371ff8109
@@ -21,7 +21,7 @@ imports:
   - mvcc/mvccpb
   - pkg/types
 - name: github.com/docker/docker
-  version: 03e089e169a2889f096aceac6ad4a4e2ed6e186b
+  version: a422774e593b33bd287d9890544ad9e09b380d8c
   subpackages:
   - api/types
   - api/types/blkiodev
@@ -34,7 +34,6 @@ imports:
   - api/types/swarm
   - api/types/swarm/runtime
   - api/types/versions
-  - errdefs
   - opts
   - pkg/fileutils
   - pkg/homedir
@@ -51,10 +50,6 @@ imports:
   - nat
 - name: github.com/docker/go-units
   version: 47565b4f722fb6ceae66b95f853feed578a4a51c
-- name: github.com/docker/libnetwork
-  version: a5a6ca30d6909649b2bcc21b6932cb93ccda9f7c
-  subpackages:
-  - ipamutils
 - name: github.com/fsouza/go-dockerclient
   version: 8842d40dbf5ee062d80f9dc429db31a0fe0cdc73
   subpackages:
@@ -102,7 +97,7 @@ imports:
   subpackages:
   - libcontainer/user
 - name: github.com/pirateXD/registrator
-  version: c7e0f7120f6eae907d3c9c160214f3a2492a28a1
+  version: c5d203ccd35a403115b706983cede8261033b128
   subpackages:
   - etcd
 - name: github.com/pkg/errors

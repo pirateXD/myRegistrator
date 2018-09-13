@@ -16,3 +16,5 @@ import:
 - package: github.com/pirateXD/registrator
   subpackages:
   - etcd
+- package: github.com/docker/docker
+  version: a422774e593b33bd287d9890544ad9e09b380d8c
