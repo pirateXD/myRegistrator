@@ -96,10 +96,6 @@ imports:
   version: 70ca035aa6ecfc496e13365fdef20383408501ba
   subpackages:
   - libcontainer/user
-- name: github.com/pirateXD/registrator
-  version: c5d203ccd35a403115b706983cede8261033b128
-  subpackages:
-  - etcd
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/sirupsen/logrus
