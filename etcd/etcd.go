@@ -155,10 +155,9 @@ func (r *EtcdAdapter) Refresh(service *bridge.Service) error {
 		client = r.client2
 	}
 
-	if leaseLeases, err = client.Leases(context.TODO()); nil != err {
+	if leaseLeases, err = client.Leases(context.TODO()); nil == err {
 		for _, lease := range leaseLeases.Leases {
-			_, err = client.KeepAliveOnce(context.TODO(), lease.ID)
-			if err != nil {
+			if _, err = client.KeepAliveOnce(context.TODO(), lease.ID); err != nil {
 				log.Println("etcd: failed to refresh service:", err)
 			}
 		}
