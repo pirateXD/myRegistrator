@@ -143,19 +143,29 @@ func (r *EtcdAdapter) Deregister(service *bridge.Service) error {
 }
 
 func (r *EtcdAdapter) Refresh(service *bridge.Service) error {
-	//return r.Register(service)
 
 	r.syncEtcdCluster()
 
+	var leaseLeases *clientv3.LeaseLeasesResponse
 	var err error
+	var client *clientv3.Client
 	if r.client != nil {
-		_, err = r.client.Leases(context.TODO())
+		client = r.client
 	} else {
-		_, err = r.client2.Leases(context.TODO())
+		client = r.client2
+	}
+
+	if leaseLeases, err = client.Leases(context.TODO()); nil != err {
+		for _, lease := range leaseLeases.Leases {
+			_, err = client.KeepAliveOnce(context.TODO(), lease.ID)
+			if err != nil {
+				log.Println("etcd: failed to refresh service:", err)
+			}
+		}
 	}
 
 	if err != nil {
-		log.Println("etcd: failed to register service:", err)
+		log.Println("etcd: failed to refresh service:", err)
 	}
 	return err
 }
