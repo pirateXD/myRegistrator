@@ -1,17 +1,16 @@
 package etcd
 
 import (
+	"context"
+	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
+	"github.com/gliderlabs/registrator/bridge"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
-
-	"context"
-	"github.com/coreos/etcd/clientv3"
-	"github.com/gliderlabs/registrator/bridge"
 	"time"
 )
 
@@ -53,32 +52,22 @@ func (f *Factory) New(uri *url.URL) bridge.RegistryAdapter {
 
 	defer res.Body.Close()
 	body, _ := ioutil.ReadAll(res.Body)
+	log.Printf("etcd version response : %v", body)
 
-	if match, _ := regexp.Match("0\\.4\\.*", body); match == true {
-		log.Println("etcd: using v0 client")
-		return &EtcdAdapter{client: newClient(urls), path: uri.Path}
-	}
-
-	return &EtcdAdapter{client2: newClient(urls), path: uri.Path}
+	return &EtcdAdapter{client: newClient(urls), path: uri.Path}
 }
 
 type EtcdAdapter struct {
 	client  *clientv3.Client
-	client2 *clientv3.Client
-
-	path string
+	path    string
+	leaseID clientv3.LeaseID //共用一个租期即可
 }
 
 func (r *EtcdAdapter) Ping() error {
 	r.syncEtcdCluster()
 
 	var err error
-	if r.client != nil {
-		_, err = r.client.MemberList(context.TODO())
-	} else {
-		_, err = r.client2.MemberList(context.TODO())
-	}
-
+	_, err = r.client.MemberList(context.TODO())
 	if err != nil {
 		return err
 	}
@@ -86,13 +75,7 @@ func (r *EtcdAdapter) Ping() error {
 }
 
 func (r *EtcdAdapter) syncEtcdCluster() {
-	var result error
-	if r.client != nil {
-		result = r.client.Sync(context.TODO())
-	} else {
-		result = r.client2.Sync(context.TODO())
-	}
-
+	var result = r.client.Sync(context.TODO())
 	if nil != result {
 		log.Println("etcd: sync cluster was unsuccessful")
 	}
@@ -101,41 +84,50 @@ func (r *EtcdAdapter) syncEtcdCluster() {
 func (r *EtcdAdapter) Register(service *bridge.Service) error {
 	r.syncEtcdCluster()
 
-	path := r.path + "/" + service.Name + "/" + service.ID
+	path := r.etcKey(service)
 	port := strconv.Itoa(service.Port)
 	addr := net.JoinHostPort(service.IP, port)
 
-	var err error
-	if r.client != nil {
-		var resp *clientv3.LeaseGrantResponse
-		if resp, err = r.client.Grant(context.TODO(), int64(service.TTL)); err == nil {
-			_, err = r.client.Put(context.TODO(), path, addr, clientv3.WithLease(resp.ID))
-		}
-	} else {
-		var resp *clientv3.LeaseGrantResponse
-		if resp, err = r.client2.Grant(context.TODO(), int64(service.TTL)); err == nil {
-			_, err = r.client2.Put(context.TODO(), path, addr, clientv3.WithLease(resp.ID))
+	grantLease := func() error {
+		if resp, err := r.client.Grant(context.TODO(), int64(service.TTL)); err != nil {
+			log.Println("etcd: failed to register service:", err)
+			return err
+		} else {
+			r.leaseID = resp.ID
+			return nil
 		}
 	}
 
-	if err != nil {
-		log.Println("etcd: failed to register service:", err)
+	if r.leaseID <= 0 {
+		if err := grantLease(); err != nil {
+			return err
+		}
+	} else {
+		if _, err := r.client.KeepAliveOnce(context.TODO(), r.leaseID); err == rpctypes.ErrLeaseNotFound {
+			if err := grantLease(); err != nil {
+				return err
+			}
+		}
 	}
-	return err
+
+	if _, err := r.client.Put(context.TODO(), path, addr, clientv3.WithLease(r.leaseID)); err != nil {
+		log.Println("etcd: failed to register service:", err)
+		return err
+	}
+	return nil
+}
+
+func (r *EtcdAdapter) etcKey(service *bridge.Service) string {
+	path := r.path + "/" + service.Name + "/" + service.ID
+	return path
 }
 
 func (r *EtcdAdapter) Deregister(service *bridge.Service) error {
 	r.syncEtcdCluster()
 
-	path := r.path + "/" + service.Name + "/" + service.ID
-
+	path := r.etcKey(service)
 	var err error
-	if r.client != nil {
-		_, err = r.client.Delete(context.TODO(), path)
-	} else {
-		_, err = r.client2.Delete(context.TODO(), path)
-	}
-
+	_, err = r.client.Delete(context.TODO(), path)
 	if err != nil {
 		log.Println("etcd: failed to deregister service:", err)
 	}
@@ -145,28 +137,11 @@ func (r *EtcdAdapter) Deregister(service *bridge.Service) error {
 func (r *EtcdAdapter) Refresh(service *bridge.Service) error {
 
 	r.syncEtcdCluster()
-
-	var leaseLeases *clientv3.LeaseLeasesResponse
-	var err error
-	var client *clientv3.Client
-	if r.client != nil {
-		client = r.client
-	} else {
-		client = r.client2
-	}
-
-	if leaseLeases, err = client.Leases(context.TODO()); nil == err {
-		for _, lease := range leaseLeases.Leases {
-			if _, err = client.KeepAliveOnce(context.TODO(), lease.ID); err != nil {
-				log.Println("etcd: failed to refresh service:", err)
-			}
-		}
-	}
-
-	if err != nil {
+	if _, err := r.client.KeepAliveOnce(context.TODO(), r.leaseID); err != nil {
 		log.Println("etcd: failed to refresh service:", err)
+		return err
 	}
-	return err
+	return nil
 }
 
 func (r *EtcdAdapter) Services() ([]*bridge.Service, error) {
