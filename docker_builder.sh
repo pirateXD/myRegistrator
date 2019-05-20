@@ -9,6 +9,6 @@ fi
 echo "tag is: $tag"
 
 docker build -t ${registryHost}registrator:${tag} -f Dockerfile .
-docker push ${registryHost}dbproxy:${tag}
+docker push ${registryHost}registrator:${tag}
 
 echo "docker Build complete!"
